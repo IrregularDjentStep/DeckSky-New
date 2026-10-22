@@ -1,58 +1,92 @@
 import {
-  ButtonItem,
+  DialogButton,
   PanelSection,
   PanelSectionRow,
+  TextField,
+  staticClasses,
+  showModal,
+  ShowModalResult,
   Navigation,
-  staticClasses
+  afterPatch,
+  wrapReactType,
+  createReactTreePatcher,
+  findInReactTree,
+  gamepadUIClasses,
+  findModuleExport,
+  Export,
+  findInTree,
+  fakeRenderComponent,
+  
 } from "@decky/ui";
 import {
   addEventListener,
   removeEventListener,
-  callable,
   definePlugin,
   toaster,
-  // routerHook
+  routerHook
 } from "@decky/api"
-import { useState } from "react";
+import { useState, ReactElement } from "react";
 import { FaShip } from "react-icons/fa";
-
+import {patchMenu, ShareSheet} from './contextMenuPatch.tsx';
+import LoginModal from './components/LoginModal.tsx';
+import { createNewClient } from "./auth/client.ts";
+import { stopObserving, startObserving, isObserverRoute } from './observer.ts'
+import {
+    AtprotoDohHandleResolver,
+    BrowserOAuthClient
+} from '@atproto/oauth-client-browser'
+import { ScreenshotUploadPage } from "./components/ScreenshotUploadPage.tsx";
 // import logo from "../assets/logo.png";
+const redirect_uri = `${window.location.origin}/decksky-callback`
+const client = await BrowserOAuthClient.load({
+        handleResolver: new AtprotoDohHandleResolver({dohEndpoint: 'https://dns.google/resolve'}),
+        //TODO: replace with production version
+        clientId:  `https://irregulardjentstep.github.io/oauth-client-metadata.json`,
+        
+    });
+await client.init();
 
-// This function calls the python function "add", which takes in two numbers and returns their sum (as a number)
-// Note the type annotations:
-//  the first one: [first: number, second: number] is for the arguments
-//  the second one: number is for the return value
-const add = callable<[first: number, second: number], number>("add");
-
-// This function calls the python function "start_timer", which takes in no arguments and returns nothing.
-// It starts a (python) timer which eventually emits the event 'timer_event'
-const startTimer = callable<[], void>("start_timer");
 
 function Content() {
-  const [result, setResult] = useState<number | undefined>();
+  const [modalResult, setModalResult] = useState<ShowModalResult | null>(null);
+  // how to set different handle resolvers for different users?
+  
 
-  const onClick = async () => {
-    const result = await add(Math.random(), Math.random());
-    setResult(result);
-  };
+  //closes the current modal
+  const closeModal = () => {
+    modalResult?.Close();
+    setModalResult(null);
+  }
 
-  return (
-    <PanelSection title="Panel Section">
+
+  const openLoginModal = () => {
+    console.log(redirect_uri);
+    const result = showModal(<LoginModal client={client} closeModal={closeModal} />);
+    setModalResult(result);
+    
+  }
+
+
+  // if there are no accounts added, show this
+
+  //otherwise, show every logged-in BSKY account
+  return <PanelSection title="Bluesky Accounts">
       <PanelSectionRow>
-        <ButtonItem
-          layout="below"
-          onClick={onClick}
+         <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          flexDirection: "column",
+          paddingLeft: "15px",
+        }}
+      >
+        No accounts have been added yet. To begin, add an account below.
+        </div>
+        <DialogButton
+          onClick={openLoginModal}
         >
-          {result ?? "Add two numbers via Python"}
-        </ButtonItem>
-      </PanelSectionRow>
-      <PanelSectionRow>
-        <ButtonItem
-          layout="below"
-          onClick={() => startTimer()}
-        >
-          {"Start Python timer"}
-        </ButtonItem>
+          "Add New Account..."
+        </DialogButton>
       </PanelSectionRow>
 
       {/* <PanelSectionRow>
@@ -68,39 +102,79 @@ function Content() {
             Navigation.Navigate("/decky-plugin-test");
             Navigation.CloseSideMenus();
           }}
+
         >
           Router
         </ButtonItem>
       </PanelSectionRow>*/}
-    </PanelSection>
-  );
+    </PanelSection>;
 };
 
 export default definePlugin(() => {
-  console.log("Template plugin initializing, this is called once on frontend startup")
-
-  // serverApi.routerHook.addRoute("/decky-plugin-test", DeckyPluginRouterTest, {
-  //   exact: true,
-  // });
-
-  // Add an event listener to the "timer_event" event from the backend
-  const listener = addEventListener<[
-    test1: string,
-    test2: boolean,
-    test3: number
-  ]>("timer_event", (test1, test2, test3) => {
-    console.log("Template got timer_event with:", test1, test2, test3)
-    toaster.toast({
-      title: "template got timer_event",
-      body: `${test1}, ${test2}, ${test3}`
-    });
+  console.log("Template plugin initializing, this is called once on frontend startup");
+  routerHook.addRoute('/decksky-share/:appId/:handle', () => (
+        <ScreenshotUploadPage/>
+  ), {
+    exact: true,
   });
+
+  const unpatchMenu = patchMenu(ShareSheet);
+
+
+ /*  const screenshotPatch = routerHook.addPatch('/media', (tree: any) => {
+      console.log("PATCH /media triggered");
+      console.log("Full tree object for screenshot:", tree);
+
+      
+
+      const routeProps = findInReactTree(tree, (x: any) => x?.type);
+      console.log("routeProps with type:", routeProps, typeof routeProps.type);
+
+      if (routeProps) {
+        afterPatch(routeProps, "type", (args: any[], ret: ReactElement) => {
+          // 'ret' is the rendered React element tree
+          // Mutate it here before React reconciles
+          console.log("ret1 -> ", ret);
+
+
+          //ret2 time
+          afterPatch(ret, "type", (args: any[], ret2: ReactElement) => {
+            // 'ret' is the rendered React element tree
+            // Mutate it here before React reconciles
+            console.log("ret2 -> ", ret2);
+
+            //TODO:RET3 go down PROPS.CHILDREN THIS TIME (going down forwardref didnt work)
+            afterPatch(ret2.type, "render", (args: any[], ret3: ReactElement) => {
+              // 'ret' is the rendered React element tree
+              // Mutate it here before React reconciles
+              console.log("ret3 -> ", ret3);
+
+              //path 1: go as deep down into 
+              afterPatch(ret3.type, "type", (args: any[], ret4: ReactElement) => {
+                console.log("ret4 ->", ret4);
+              });
+
+              return ret3;
+            });
+
+            return ret2;
+          });
+
+          return ret;
+        });
+      } else {
+        console.log("routeProps not found.");
+      }
+      return tree;
+    }); */
+
+
 
   return {
     // The name shown in various decky menus
-    name: "Test Plugin",
+    name: "DeckSkyRewrite",
     // The element displayed at the top of your plugin's menu
-    titleView: <div className={staticClasses.Title}>Decky Example Plugin</div>,
+    titleView: <div className={staticClasses.Title}>DeckSky</div>,
     // The content of your plugin's menu
     content: <Content />,
     // The icon displayed in the plugin list
@@ -108,8 +182,8 @@ export default definePlugin(() => {
     // The function triggered when your plugin unloads
     onDismount() {
       console.log("Unloading")
-      removeEventListener("timer_event", listener);
-      // serverApi.routerHook.removeRoute("/decky-plugin-test");
-    },
-  };
+      routerHook.removeRoute(`/decksky-share`);
+      unpatchMenu?.unpatch();
+    }
+}
 });

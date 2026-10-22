@@ -1,11 +1,12 @@
 {
   "compilerOptions": {
+    "rootDir": "src",
     "outDir": "dist",
-    "module": "ESNext",
+    "module": "Node16",
     "target": "ES2020",
     "jsx": "react-jsx",
     "declaration": false,
-    "moduleResolution": "node",
+    "moduleResolution": "node16",
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "esModuleInterop": true,
@@ -13,6 +14,8 @@
     "noImplicitThis": true,
     "noImplicitAny": true,
     "strict": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
     "allowSyntheticDefaultImports": true
   },
   "include": ["src"],
